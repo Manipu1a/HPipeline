@@ -1,0 +1,6 @@
+#ifndef CUSTOM_LIT_INPUT_INCLUDED
+#define CUSTOM_LIT_INPUT_INCLUDED
+
+
+
+#endif

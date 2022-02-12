@@ -1,0 +1,28 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+#include "../ShaderLibrary/Common.hlsl"
+#include "../ShaderLibrary/BRDF.hlsl"
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> _LUT;
+
+float _Step;
+
+static const float Epsilon = 0.01; // This program needs larger eps.
+
+float2 GetUV(uint3 id)
+{
+    return (id.xy) * _Step;
+}
+
+[numthreads(32,32,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    float2 UV = GetUV(id);
+    
+    // Make sure viewing angle is non-zero to avoid divisions by zero (and subsequently NaNs).
+    float2 integratedBRDF = IntegrateBRDF(max(UV.x, 0.001f), 1.0 - UV.y);
+    _LUT[id.xy] = float4(integratedBRDF,0.0, 0.0);
+}

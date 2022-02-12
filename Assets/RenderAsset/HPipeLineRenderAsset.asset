@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8a9f398f25d675343a3843f0c78e784b, type: 3}
+  m_Name: HPipeLineRenderAsset
+  m_EditorClassIdentifier: 
+  settings:
+    globalEnvMapDiffuse: {fileID: 8900000, guid: e78718557e0e947429b3581703f165f0, type: 3}
+    LutTex: {fileID: 2800000, guid: 197af851550c796468b77173f10f9526, type: 3}
+    irradianceShader: {fileID: 4800000, guid: 9497c7a2542bfc944a191158726a4b8c, type: 3}
+    specularIBLShader: {fileID: 4800000, guid: 93f9dd93ce015b94c8d6896162bb5b61, type: 3}
+    mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+    irradianceEnvCubeMap: {fileID: 8400000, guid: 0d13a3d1c59358e4abad1664ae205a7e, type: 2}
+    preFilterCubeMap: {fileID: 8400000, guid: fb3416a01fb46c64abddc22dc082fd28, type: 2}
+    Lut: {fileID: 8400000, guid: 2ac4dadba89775e4cbff8a926fbf47fc, type: 2}
+    CSIntegrateBRDF: {fileID: 7200000, guid: d02d15093ce5d6d4ea4c47bd38f74d62, type: 3}
