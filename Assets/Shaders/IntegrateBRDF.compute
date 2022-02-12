@@ -23,6 +23,6 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     float2 UV = GetUV(id);
     
     // Make sure viewing angle is non-zero to avoid divisions by zero (and subsequently NaNs).
-    float2 integratedBRDF = IntegrateBRDF(max(UV.x, 0.001f), 1.0 - UV.y);
-    _LUT[id.xy] = float4(integratedBRDF,0.0, 0.0);
+    float4 integratedBRDF = PrecomputeL_DFG(max(UV.x, 0.001f), 1.0 - UV.y);
+    _LUT[id.xy] = float4(integratedBRDF);
 }

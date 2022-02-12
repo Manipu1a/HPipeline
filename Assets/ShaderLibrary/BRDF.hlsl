@@ -128,7 +128,7 @@ float Fd_Lambert()
     return 1.0 / PI;
 }
 
-//Diffuse Burley brdf 
+//Disnel Diffuse Burley brdf 
 float Fd_Burley(float NoV, float NoL, float LoH, float roughness)
 {
     float f90 = 0.5 + 2.0 * roughness * LoH * LoH;
@@ -183,16 +183,16 @@ float3 PreFilterEnvMap(TextureCube envMap, sampler samplerEnv, float LinearRough
         if(NdotL > 0.0)
         {
             //根据pdf来计算mipmap等级
-            /*float D = D_GGX(NdotH, LinearRoughness);
+            float D = D_GGX(NdotH, LinearRoughness);
             float pdf = (D * NdotH / (4 * HdotV) + 0.0001f);
 
             float saTexel = 4.0f * PI / (6.0f * SPEC_TEX_WIDTH * SPEC_TEX_WIDTH);
             float saSample = 1.0f / (SAMPLE_COUNT * pdf + 0.00001f);
 
-            float mipLevel = LinearRoughness == 0.0f ? 0.0f : 0.5f * log2(saSample / saTexel);*/
+            float mipLevel = LinearRoughness == 0.0f ? 0.0f : 0.5f * log2(saSample / saTexel);
             
-            //prefilteredColor += envMap.SampleLevel(samplerEnv, lightVec, mipLevel).rgb * NdotL;
-            prefilteredColor += SAMPLE_TEXTURECUBE(envMap, samplerEnv, lightVec) * NdotL;
+            prefilteredColor += envMap.SampleLevel(samplerEnv, lightVec, mipLevel).rgb * NdotL;
+            //prefilteredColor += SAMPLE_TEXTURECUBE(envMap, samplerEnv, lightVec) * NdotL;
             totalWeight += NdotL;
         }
     }
@@ -202,15 +202,34 @@ float3 PreFilterEnvMap(TextureCube envMap, sampler samplerEnv, float LinearRough
     return prefilteredColor;
 }
 
-//预计算brdf项-间接高光实时计算使用
-float2 IntegrateBRDF(float NdotV, float LinearRoughness)
-{
-    // Derive tangent-space viewing vector from angle to normal (pointing towards +Z in this reference frame).
-    float3 V;
-    V.x = max(sqrt(1.0 - NdotV * NdotV),0.001f);
-    V.y = 0.0;
-    V.z = NdotV;
+float IBL_Diffuse(float NdotV, float NdotL, float LdotH, float linearRoughness) {
+    return Fd_DisneyRenormalized(NdotV, NdotL, LdotH, linearRoughness);
+}
 
+//预计算Diffuse部分dfg
+float2 PrecomputeDiffuseL_DFG(float3 V, float NdotV, float linearRoughness)
+{
+    float r = .0f;
+    const uint SAMPLE_COUNT = 2048u;
+    for (uint i = 0; i < SAMPLE_COUNT; i++) {
+        float2 E = Hammersley(i, SAMPLE_COUNT);
+        float3 H = SampleHemisphereCosine(E.x, E.y);
+        float3 L = 2.0f * dot(V, H) * H - V;
+
+        float NdotL = saturate(L.z);
+        float LdotH = saturate(dot(L, H));
+
+        if (LdotH > .0f) {
+            float diffuse = IBL_Diffuse(NdotV, NdotL, LdotH, linearRoughness);
+            r += diffuse;
+        }
+    }
+    return r / (float) SAMPLE_COUNT;
+}
+
+//预计算Specular部分dfg
+float2 PrecomputeSpecularL_DFG(float3 V, float NdotV, float linearRoughness)
+{
     float A = 0.0;
     float B = 0.0;
     
@@ -221,7 +240,7 @@ float2 IntegrateBRDF(float NdotV, float LinearRoughness)
     for(uint i = 0u;i < SAMPLE_COUNT;++i)
     {
         float2 xi = Hammersley(i, SAMPLE_COUNT);
-        float3 halfway = ImportanceSampleGGX(xi, N, LinearRoughness);
+        float3 halfway = ImportanceSampleGGX(xi, N, linearRoughness);
         // halfway = SampleGGX(xi.x, xi.y, LinearRoughness);
         float3 lightVec = normalize(2.0 * dot(V, halfway) * halfway - V);
         
@@ -231,9 +250,8 @@ float2 IntegrateBRDF(float NdotV, float LinearRoughness)
  
         if(NdotL > 0.0)
         {
-            float G = GeometrySmith(N, V, lightVec, LinearRoughness);
+            float G = GeometrySmith(N, V, lightVec, linearRoughness);
             float G_Vis = (G * VdotH) / max((NdotH * NdotV), 0.001f);
-            //float G_Vis = (G * VdotH) / NdotH;
             float Fc = pow(1.0 - VdotH, 5.0);
             A += G_Vis;
             B += Fc * G_Vis;
@@ -243,6 +261,22 @@ float2 IntegrateBRDF(float NdotV, float LinearRoughness)
     B /= float(SAMPLE_COUNT);
     
     return float2(A, B);
+}
+
+//预计算brdf项-间接高光实时计算使用
+float4 PrecomputeL_DFG(float NdotV, float LinearRoughness)
+{
+    // Derive tangent-space viewing vector from angle to normal (pointing towards +Z in this reference frame).
+    float3 V;
+    V.x = max(sqrt(1.0 - NdotV * NdotV),0.001f);
+    V.y = 0.0;
+    V.z = NdotV;
+    float4 color;
+    color.xy = PrecomputeSpecularL_DFG(V, NdotV, LinearRoughness);
+    color.z = PrecomputeDiffuseL_DFG(V, NdotV, LinearRoughness);
+    color.w = 1.0f;
+    
+    return color;
 }
 
 //直接光 brdf计算
@@ -262,7 +296,6 @@ float3 DirectBrdf(Surface surface, BRDF brdf, Light light)
     float G = GeometrySmith(N, V, L, brdf.perceptualRoughness);
     float G_Vis = (G * VoH) / (NoH * NoV);
     float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.001;
-
     
     //感知线性粗糙度到粗糙度
     //float roughness = brdf.perceptualRoughness * brdf.perceptualRoughness;
@@ -301,15 +334,16 @@ float3 IndirectBRDF(Surface surface, BRDF brdf)
     float3 kS = F_SchlickRoughness(NoV, f0, brdf.roughness);
     float3 kD = 1.0 - kS;
     kD *= 1.0 - surface.metallic;
+
+    float3 envBRDF = SAMPLE_TEXTURE2D(_BrdfLUT, sampler_BrdfLUT, float2(clamp(NoV, 0.001f,0.999f), 0.9f)).rgb;
     
     float3 irradiance = SampleIrradiance(N);
-    float3 indirectDiffuse = irradiance * brdf.diffuse;
+    float3 indirectDiffuse = irradiance * brdf.diffuse * envBRDF.z;
     
     //IBL-1
     float3 prefilteredColor = _PrefilterCubeMap.SampleLevel(sampler_PrefilterCubeMap, R, brdf.roughness * MAX_REFLECTION_LOD).rgb;
     //IBL-2
     float3 F = kS;
-    float2 envBRDF = SAMPLE_TEXTURE2D(_BrdfLUT, sampler_BrdfLUT, float2(clamp(NoV, 0.001f,0.999f), 0.9f)).rg;
     
     float3 indirectSpecular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
     
