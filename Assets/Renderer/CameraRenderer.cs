@@ -292,7 +292,7 @@ public class CameraRenderer
             int groups = Mathf.CeilToInt(bufferSize / 32f);
             HRenderPipeline.settings.CSIntegrateBRDF.Dispatch(0, groups,groups,1);
         }
-        
+         
         ExecuteCommand();
     }
     void DrawVisibleGeometry()

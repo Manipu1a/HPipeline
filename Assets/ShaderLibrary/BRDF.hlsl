@@ -49,7 +49,7 @@ float D_GGX(float NoH, float roughness)
 {
     float a2 = roughness * roughness;
     float f = (NoH * a2 - NoH) * NoH + 1.0;
-    return a2 / (f * f);
+    return a2 / (PI * f * f);
 }
 
 //优化版GGX
@@ -63,8 +63,9 @@ float D_GGX(float roughness, float NoH, const float3 n, const float3 h)
     float d = k * k * (1.0 / PI);
     return satureMediump(d);
 }
-//G项- GGX+Schlick-Beckmann
-float GeometrySchlickGGX(float NdotV, float roughness)
+
+
+float G_SchlickGGX(float NdotV, float roughness)
 {
     float a = roughness; //?
     float k = (a * a) / 2.0;
@@ -74,12 +75,14 @@ float GeometrySchlickGGX(float NdotV, float roughness)
 
     return nom / denom;
 }
-float GeometrySmith(float3 N, float3 V,float3 L, float roughness)
+
+//G项- Schlick-GGX
+float G_Smith(float3 N, float3 V,float3 L, float roughness)
 {
     float NdotV = max(dot(N, V), 0.001f);
     float NdotL = max(dot(N, L), 0.001f);
-    float ggx1 = GeometrySchlickGGX(NdotV, roughness);
-    float ggx2 = GeometrySchlickGGX(NdotL, roughness);
+    float ggx1 = G_SchlickGGX(NdotV, roughness);
+    float ggx2 = G_SchlickGGX(NdotL, roughness);
 
     return ggx1 * ggx2;
 }
@@ -207,7 +210,7 @@ float IBL_Diffuse(float NdotV, float NdotL, float LdotH, float linearRoughness) 
 }
 
 //预计算Diffuse部分dfg
-float2 PrecomputeDiffuseL_DFG(float3 V, float NdotV, float linearRoughness)
+float PrecomputeDiffuseL_DFG(float3 V, float NdotV, float linearRoughness)
 {
     float r = .0f;
     const uint SAMPLE_COUNT = 2048u;
@@ -250,7 +253,7 @@ float2 PrecomputeSpecularL_DFG(float3 V, float NdotV, float linearRoughness)
  
         if(NdotL > 0.0)
         {
-            float G = GeometrySmith(N, V, lightVec, linearRoughness);
+            float G = G_Smith(N, V, lightVec, linearRoughness);
             float G_Vis = (G * VdotH) / max((NdotH * NdotV), 0.001f);
             float Fc = pow(1.0 - VdotH, 5.0);
             A += G_Vis;
@@ -293,7 +296,7 @@ float3 DirectBrdf(Surface surface, BRDF brdf, Light light)
     float NoH = saturate(dot(N, H));
     float LoH = saturate(dot(L, H));
     float VoH = saturate(dot(V, H));
-    float G = GeometrySmith(N, V, L, brdf.perceptualRoughness);
+    float G = G_Smith(N, V, L, brdf.perceptualRoughness);
     float G_Vis = (G * VoH) / (NoH * NoV);
     float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.001;
     
@@ -304,6 +307,7 @@ float3 DirectBrdf(Surface surface, BRDF brdf, Light light)
     
     float3 f0 = brdf.reflectance;
     float3 F = F_Schlick(VoH, f0);
+    
     float Vis = V_SmithGGXCorrelated(NoV, NoL, brdf.roughness);
     
     float3 nominator    = D * G * F;
